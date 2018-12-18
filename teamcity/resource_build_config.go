@@ -61,6 +61,7 @@ func resourceBuildConfig() *schema.Resource {
 					}
 				}
 			}
+
 			return nil
 		},
 
@@ -98,7 +99,7 @@ func resourceBuildConfig() *schema.Resource {
 				Set: vcsRootHash,
 			},
 			"step": {
-				Type:     schema.TypeSet,
+				Type:     schema.TypeList,
 				Optional: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -149,17 +150,17 @@ func resourceBuildConfig() *schema.Resource {
 						"package_paths": {
 							Type:     schema.TypeString,
 							Optional: true, // Should be required when type is octopus.push.package
-							Default:  "*",
+							Default:  "",
 						},
 						"force_push": {
 							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  true,
+							Default:  false,
 						},
 						"publish_artifacts": {
 							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  true,
+							Default:  false,
 						},
 
 						// octopus.create.release parameters.
@@ -201,11 +202,10 @@ func resourceBuildConfig() *schema.Resource {
 						"wait_for_deployments": {
 							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  true,
+							Default:  false,
 						},
 					},
 				},
-				Set: stepSetHash,
 			},
 			"env_params": {
 				Type:     schema.TypeMap,
@@ -388,25 +388,22 @@ func resourceBuildConfigUpdate(d *schema.ResourceData, meta interface{}) error {
 		d.SetPartial("vcs_root")
 	}
 	if d.HasChange("step") {
-		o, n := d.GetChange("step")
-		os := o.(*schema.Set)
-		ns := n.(*schema.Set)
-		remove, _ := expandBuildSteps(os.Difference(ns).List())
-		add, err := expandBuildSteps(ns.Difference(os).List())
+		add, err := expandBuildSteps(d.Get("step").([]interface{}))
 		if err != nil {
 			return err
 		}
-		if len(remove) > 0 {
-			for _, s := range remove {
-				err := client.BuildTypes.DeleteStep(dt.ID, s.GetID())
-				if err != nil {
-					return err
-				}
+		//Remove all existing steps
+		remove, err := client.BuildTypes.GetSteps(d.Id())
+		for _, s := range remove {
+			err := client.BuildTypes.DeleteStep(dt.ID, s.GetID())
+			if err != nil {
+				return err
 			}
 		}
 		if len(add) > 0 {
-			for _, s := range add {
-				_, err := client.BuildTypes.AddStep(dt.ID, s)
+			for i, s := range add {
+				added, err := client.BuildTypes.AddStep(dt.ID, s)
+				log.Printf("[INFO] Adding step '%v' (%v)with order = %v", s.GetName(), added.GetID(), i+1)
 				if err != nil {
 					return err
 				}
@@ -793,25 +790,27 @@ func expandBuildSteps(list interface{}) ([]api.Step, error) {
 		}
 		out = append(out, s)
 	}
+
 	return out, nil
 }
 
-func expandBuildStep(raw interface{}) (api.Step, error) {
+func expandBuildStep(raw interface{}) (step api.Step, err error) {
 	localStep := raw.(map[string]interface{})
-
+	err = nil
 	t := localStep["type"].(string)
 	switch t {
 	case "powershell":
-		return expandStepPowershell(localStep)
+		step, err = expandStepPowershell(localStep)
 	case "cmd_line":
-		return expandStepCmdLine(localStep)
+		step, err = expandStepCmdLine(localStep)
 	case "octopus.push.package":
-		return expandStepOctopusPushPackage(localStep)
+		step, err = expandStepOctopusPushPackage(localStep)
 	case "octopus.create.release":
-		return expandStepOctopusCreateRelease(localStep)
+		step, err = expandStepOctopusCreateRelease(localStep)
 	default:
 		return nil, fmt.Errorf("Unsupported step type '%s'", t)
 	}
+	return step, err
 }
 
 func expandStepCmdLine(dt map[string]interface{}) (*api.StepCommandLine, error) {
