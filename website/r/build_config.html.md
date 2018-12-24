@@ -77,12 +77,29 @@ The `step` block supports the attributes below. You may use one step block per s
 * `args`: (Optional) Arguments to pass to external script specified in `file`.
 
 If you selected the `octopus.push.package` runner, here are the available options:
+
 * `host`: (Required) Octopus web portal URL.
 * `api_key`: (Required) Octopus API key.
 * `package_paths`: (Required) Package path patterns.
 * `force_push`: (Optional).  Defaults to `true`.
 * `publish_artifacts`: (Optional). Defaults to `true`.
 * `additional_command_line_arguments`: (Optional). Defaults to `''` (none).
+
+If you selected `octopus.create.release` runner, here are the available options:
+
+* `octopus_server_version`: (Required) version of the Octopus Deploy server you are using.
+* `project`: (Required) Name of the Octopus project to create a release for.
+* `release_number`: (Optional) Number to use for this release. Defaults to `''` (none).
+* `channel_name`: (Optional) Channel to create the release for. Defaults to `''` (none).
+* `environments`: (Optional) Comma separated list of environments to deploy to. Leave empty to create a release without
+  deploying it.  Defaults to `''` (none).
+* `tenants`: (Optional) Comma separated list of tenants to promote for. Wildcard '*' will promote all tenants currently
+  able to deploy to the above provided environment. Note that when supplying tenant filters then only one environment
+  may be provided above. Defaults to `''` (none).
+* `tenant_tags`: (Optional) Comma separated list of tenant tags that match tenants to deploy for. Note that when
+  supplying tag filters then only one environment may be provided above. Defaults to `''` (none).
+* `wait_for_deployments`: (Optional) If true, the build process will only succeed if the deployment is successful.
+  Output from the deployment will appear in the build output.Defaults to `true`.
 
 The `settings` block supports:
 
