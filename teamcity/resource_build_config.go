@@ -107,9 +107,10 @@ func resourceBuildConfig() *schema.Resource {
 							Computed: true,
 						},
 						"type": {
-							Type:         schema.TypeString,
-							Required:     true,
-							ValidateFunc: validation.StringInSlice([]string{"powershell", "cmd_line", "octopus.push.package"}, false),
+							Type:     schema.TypeString,
+							Required: true,
+							ValidateFunc: validation.StringInSlice([]string{"powershell", "cmd_line",
+								"octopus.push.package", "octopus.create.release"}, false),
 						},
 						"name": {
 							Type:     schema.TypeString,
@@ -129,7 +130,7 @@ func resourceBuildConfig() *schema.Resource {
 							Optional: true,
 						},
 
-						// octopus.push.package parameters.
+						// octopus common parameters.
 						"host": {
 							Type:     schema.TypeString,
 							Optional: true, // Should be required when type is octopus.push.package
@@ -138,6 +139,13 @@ func resourceBuildConfig() *schema.Resource {
 							Type:     schema.TypeString,
 							Optional: true, // Should be required when type is octopus.push.package
 						},
+						"additional_command_line_arguments": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Default:  "",
+						},
+
+						// octopus.push.package parameters.
 						"package_paths": {
 							Type:     schema.TypeString,
 							Optional: true, // Should be required when type is octopus.push.package
@@ -153,10 +161,47 @@ func resourceBuildConfig() *schema.Resource {
 							Optional: true,
 							Default:  true,
 						},
-						"additional_command_line_arguments": {
+
+						// octopus.create.release parameters.
+						"octopus_server_version": {
+							Type:     schema.TypeString,
+							Optional: true, // Should be required when type is octopus.create.release
+							Default:  "",
+						},
+						"project": {
+							Type:     schema.TypeString,
+							Optional: true, // Should be required when type is octopus.create.release
+							Default:  "",
+						},
+						"release_number": {
 							Type:     schema.TypeString,
 							Optional: true,
 							Default:  "",
+						},
+						"channel_name": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Default:  "",
+						},
+						"environments": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Default:  "",
+						},
+						"tenants": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Default:  "",
+						},
+						"tenant_tags": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Default:  "",
+						},
+						"wait_for_deployments": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Default:  true,
 						},
 					},
 				},
@@ -453,9 +498,10 @@ func getBuildConfiguration(c *api.Client, id string) (*api.BuildType, error) {
 }
 
 var stepTypeMap = map[string]string{
-	api.StepTypePowershell:         "powershell",
-	api.StepTypeCommandLine:        "cmd_line",
-	api.StepTypeOctopusPushPackage: "octopus.push.package",
+	api.StepTypePowershell:           "powershell",
+	api.StepTypeCommandLine:          "cmd_line",
+	api.StepTypeOctopusPushPackage:   "octopus.push.package",
+	api.StepTypeOctopusCreateRelease: "octopus.create.release",
 }
 
 func flattenParameterCollection(d *schema.ResourceData, params *api.Parameters) error {
@@ -617,6 +663,8 @@ func flattenBuildStep(s api.Step) (map[string]interface{}, error) {
 		out, err = flattenBuildStepCmdLine(s.(*api.StepCommandLine)), nil
 	case "octopus.push.package":
 		out, err = flattenBuildStepOctopusPushPackage(s.(*api.StepOctopusPushPackage)), nil
+	case "octopus.create.release":
+		out, err = flattenBuildStepOctopusCreateRelease(s.(*api.StepOctopusCreateRelease)), nil
 	default:
 		return nil, fmt.Errorf("Build step type '%s' not supported", s.Type())
 	}
@@ -691,6 +739,50 @@ func flattenBuildStepOctopusPushPackage(s *api.StepOctopusPushPackage) map[strin
 	return m
 }
 
+func flattenBuildStepOctopusCreateRelease(s *api.StepOctopusCreateRelease) map[string]interface{} {
+	m := make(map[string]interface{})
+	if s.Name != "" {
+		m["name"] = s.Name
+	}
+	if s.Host != "" {
+		m["host"] = s.Host
+	}
+	if s.ApiKey != "" {
+		m["api_key"] = s.ApiKey
+	}
+	if s.OctopusServerVersion != "" {
+		m["octopus_server_version"] = s.OctopusServerVersion
+	}
+	if s.Project != "" {
+		m["project"] = s.Project
+	}
+	if s.ReleaseNumber != "" {
+		m["release_number"] = s.ReleaseNumber
+	}
+	if s.ChannelName != "" {
+		m["channel_name"] = s.ChannelName
+	}
+	if s.Environments != "" {
+		m["environments"] = s.Environments
+	}
+	if s.Tenants != "" {
+		m["tenants"] = s.Tenants
+	}
+	if s.TenantTags != "" {
+		m["tenant_tags"] = s.TenantTags
+	}
+	if s.WaitForDeployments {
+		m["wait_for_deployments"] = s.WaitForDeployments
+	}
+	if s.AdditionalCommandLineArguments != "" {
+		m["additional_command_line_arguments"] = s.AdditionalCommandLineArguments
+	}
+
+	m["type"] = "octopus.create.release"
+
+	return m
+}
+
 func expandBuildSteps(list interface{}) ([]api.Step, error) {
 	out := make([]api.Step, 0)
 	in := list.([]interface{})
@@ -715,6 +807,8 @@ func expandBuildStep(raw interface{}) (api.Step, error) {
 		return expandStepCmdLine(localStep)
 	case "octopus.push.package":
 		return expandStepOctopusPushPackage(localStep)
+	case "octopus.create.release":
+		return expandStepOctopusCreateRelease(localStep)
 	default:
 		return nil, fmt.Errorf("Unsupported step type '%s'", t)
 	}
@@ -795,8 +889,6 @@ func expandStepOctopusPushPackage(dt map[string]interface{}) (*api.StepOctopusPu
 	if err != nil {
 		return nil, err
 	}
-	// s := &api.StepOctopusPushPackage{}
-
 	if v, ok := dt["host"]; ok {
 		s.Host = v.(string)
 	}
@@ -821,6 +913,55 @@ func expandStepOctopusPushPackage(dt map[string]interface{}) (*api.StepOctopusPu
 		s.AdditionalCommandLineArguments = v.(string)
 	}
 
+	if v, ok := dt["step_id"]; ok {
+		s.ID = v.(string)
+	}
+	return s, nil
+}
+
+func expandStepOctopusCreateRelease(dt map[string]interface{}) (*api.StepOctopusCreateRelease, error) {
+	var name string
+	if v, ok := dt["name"]; ok {
+		name = v.(string)
+	}
+
+	s, err := api.NewStepOctopusCreateRelease(name)
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := dt["host"]; ok {
+		s.Host = v.(string)
+	}
+	if v, ok := dt["api_key"]; ok {
+		s.ApiKey = v.(string)
+	}
+	if v, ok := dt["octopus_server_version"]; ok {
+		s.OctopusServerVersion = v.(string)
+	}
+	if v, ok := dt["project"]; ok {
+		s.Project = v.(string)
+	}
+	if v, ok := dt["release_number"]; ok {
+		s.ReleaseNumber = v.(string)
+	}
+	if v, ok := dt["channel_name"]; ok {
+		s.ChannelName = v.(string)
+	}
+	if v, ok := dt["environments"]; ok {
+		s.Environments = v.(string)
+	}
+	if v, ok := dt["tenants"]; ok {
+		s.Tenants = v.(string)
+	}
+	if v, ok := dt["tenant_tags"]; ok {
+		s.TenantTags = v.(string)
+	}
+	if v, ok := dt["wait_for_deployments"]; ok {
+		s.WaitForDeployments = v.(bool)
+	}
+	if v, ok := dt["additional_Command_line_arguments"]; ok {
+		s.AdditionalCommandLineArguments = v.(string)
+	}
 	if v, ok := dt["step_id"]; ok {
 		s.ID = v.(string)
 	}
@@ -868,15 +1009,26 @@ func stepSetHash(v interface{}) int {
 		buf.WriteString(fmt.Sprintf("%s-", v.(string)))
 	}
 
+	// Octopus common.
+	octopusStringParams := []string{"host", "api_key", "additional_Command_line_arguments"}
+	octopusBoolParams := []string{}
+
 	// Octopus push package.
-	octopusPushPackageStringParams := []string{"host", "api_key", "package_paths", "additional_Command_line_arguments"}
-	for _, element := range octopusPushPackageStringParams {
+	octopusStringParams = append(octopusStringParams, "package_paths")
+	octopusBoolParams = append(octopusBoolParams, "force_push", "publish_artifacts")
+
+	// Ocotpus create release.
+	octopusStringParams = append(octopusStringParams, "octopus_server_Version", "project", "release_number",
+		"channel_name", "environments", "tenants", "tenant_tags")
+	octopusBoolParams = append(octopusBoolParams, "wait_for_deployments")
+
+	// Octopus params.
+	for _, element := range octopusStringParams {
 		if v, ok := m[element]; ok {
 			buf.WriteString(fmt.Sprintf("%s-", v.(string)))
 		}
 	}
-	octopusPushPackageBoolParams := []string{"force_push", "publish_artifacts"}
-	for _, element := range octopusPushPackageBoolParams {
+	for _, element := range octopusBoolParams {
 		if v, ok := m[element]; ok {
 			buf.WriteString(strconv.FormatBool(v.(bool)))
 		}
