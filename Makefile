@@ -2,7 +2,7 @@
 PROJECT_NAME = terraform-provider-teamcity
 
 # Makefile parameters.
-TAG ?= $(shell git describe)
+TAG ?= $(shell git describe || git describe --tags)
 
 # General.
 SHELL = /bin/bash
