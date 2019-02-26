@@ -731,6 +731,26 @@ func testAccCheckProperties(
 	}
 }
 
+func TestAccBuildConfig_StepsOctopusPushPackage(t *testing.T) {
+	var bc api.BuildType
+	resName := "teamcity_build_config.build_configuration_test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckBuildConfigDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: TestAccBuildConfigOctopusPushPackage,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBuildConfigExists(resName, &bc),
+					resource.TestCheckResourceAttrSet(resName, "step.0.step_id"),
+				),
+			},
+		},
+	})
+}
+
 const TestAccBuildConfigBasic = `
 resource "teamcity_project" "build_config_project_test" {
   name = "build_config_project_test"
@@ -938,6 +958,27 @@ resource "teamcity_build_config" "build_configuration_test" {
 		name = "updated_script"
 		file = "updated.ps1"
 		args = "-Target pullrequest"
+	}
+}
+`
+
+const TestAccBuildConfigOctopusPushPackage = `
+resource "teamcity_project" "build_config_project_test" {
+  name = "build_config_project_test"
+}
+
+resource "teamcity_build_config" "build_configuration_test" {
+	name = "build config test"
+	project_id = "${teamcity_project.build_config_project_test.id}"
+
+	step {
+		name		  = "Octopus Push Package"
+		type          = "octopus.push.package"
+		host          = "https://octopus.test"
+		api_key       = "AK37CJDBC6"
+		package_paths = "*"
+		force_push    = true
+		additional_command_line_arguments = "--releasenotes notes"
 	}
 }
 `
