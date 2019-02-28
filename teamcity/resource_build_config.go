@@ -1,15 +1,12 @@
 package teamcity
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"reflect"
-	"strconv"
 	"strings"
 
 	api "github.com/cvbarros/go-teamcity-sdk/teamcity"
-	"github.com/hashicorp/terraform/helper/hashcode"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/helper/validation"
 )
@@ -137,8 +134,9 @@ func resourceBuildConfig() *schema.Resource {
 							Optional: true, // Should be required when type is octopus.push.package
 						},
 						"api_key": {
-							Type:     schema.TypeString,
-							Optional: true, // Should be required when type is octopus.push.package
+							Type:      schema.TypeString,
+							Optional:  true, // Should be required when type is octopus.push.package
+							Sensitive: true,
 						},
 						"additional_command_line_arguments": {
 							Type:     schema.TypeString,
@@ -908,7 +906,7 @@ func expandStepOctopusPushPackage(dt map[string]interface{}) (*api.StepOctopusPu
 		s.PublishArtifacts = v.(bool)
 	}
 
-	if v, ok := dt["additional_Command_line_arguments"]; ok {
+	if v, ok := dt["additional_command_line_arguments"]; ok {
 		s.AdditionalCommandLineArguments = v.(string)
 	}
 
@@ -958,7 +956,7 @@ func expandStepOctopusCreateRelease(dt map[string]interface{}) (*api.StepOctopus
 	if v, ok := dt["wait_for_deployments"]; ok {
 		s.WaitForDeployments = v.(bool)
 	}
-	if v, ok := dt["additional_Command_line_arguments"]; ok {
+	if v, ok := dt["additional_command_line_arguments"]; ok {
 		s.AdditionalCommandLineArguments = v.(string)
 	}
 	if v, ok := dt["step_id"]; ok {
@@ -985,53 +983,4 @@ func buildVcsRootEntry(raw interface{}) *api.VcsRootEntry {
 func vcsRootHash(v interface{}) int {
 	raw := v.(map[string]interface{})
 	return schema.HashString(raw["id"].(string))
-}
-
-func stepSetHash(v interface{}) int {
-	var buf bytes.Buffer
-	m := v.(map[string]interface{})
-	buf.WriteString(fmt.Sprintf("%s-", m["type"].(string)))
-
-	if v, ok := m["name"]; ok {
-		buf.WriteString(fmt.Sprintf("%s-", v.(string)))
-	}
-
-	if v, ok := m["file"]; ok {
-		buf.WriteString(fmt.Sprintf("%s-", v.(string)))
-	}
-
-	if v, ok := m["args"]; ok {
-		buf.WriteString(fmt.Sprintf("%s-", v.(string)))
-	}
-
-	if v, ok := m["code"]; ok {
-		buf.WriteString(fmt.Sprintf("%s-", v.(string)))
-	}
-
-	// Octopus common.
-	octopusStringParams := []string{"host", "api_key", "additional_Command_line_arguments"}
-	octopusBoolParams := []string{}
-
-	// Octopus push package.
-	octopusStringParams = append(octopusStringParams, "package_paths")
-	octopusBoolParams = append(octopusBoolParams, "force_push", "publish_artifacts")
-
-	// Ocotpus create release.
-	octopusStringParams = append(octopusStringParams, "octopus_server_Version", "project", "release_number",
-		"channel_name", "environments", "tenants", "tenant_tags")
-	octopusBoolParams = append(octopusBoolParams, "wait_for_deployments")
-
-	// Octopus params.
-	for _, element := range octopusStringParams {
-		if v, ok := m[element]; ok {
-			buf.WriteString(fmt.Sprintf("%s-", v.(string)))
-		}
-	}
-	for _, element := range octopusBoolParams {
-		if v, ok := m[element]; ok {
-			buf.WriteString(strconv.FormatBool(v.(bool)))
-		}
-	}
-
-	return hashcode.String(buf.String())
 }

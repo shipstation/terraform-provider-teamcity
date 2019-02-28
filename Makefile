@@ -38,11 +38,15 @@ build: ## Build the project for the current platform
 ci: lint test ## Run all the CI targets
 
 .PHONY: clean
-clean: clean-code ## Clean everything (!DESTRUCTIVE!)
+clean: clean-code clean-docker ## Clean everything (!DESTRUCTIVE!)
 
 .PHONY: clean-code
 clean-code: ## Remove unwanted files in this project (!DESTRUCTIVE!)
 	@cd $(TOPDIR) && git clean -ffdx && git reset --hard
+
+.PHONY: clean-docker
+clean-docker: ## Remove the docker container if it is running
+	@docker rm -f $(CONTAINER_NAME) || true
 
 .PHONY: dist
 dist: $(PLATFORMS) ## Package the project for all available platforms
@@ -67,6 +71,7 @@ setup: ## Setup the full environment (default)
 test: ## Run the unit/integration tests
 	@test -d  $(TEAMCITY_DATA_DIR) || tar xfz $(INTEGRATION_TEST_DIR)/teamcity_data.tar.gz -C $(INTEGRATION_TEST_DIR)
 	@curl -sL https://download.octopusdeploy.com/octopus-teamcity/4.42.1/Octopus.TeamCity.zip -o $(TEAMCITY_DATA_DIR)/plugins/Octopus.TeamCity.zip
+	@echo "rest.listSecureProperties=true" > $(TEAMCITY_DATA_DIR)/config/internal.properties
 	@test -n "$$(docker ps -q -f name=$(CONTAINER_NAME))" || docker run --rm -d \
 		--name $(CONTAINER_NAME) \
 		-v $(PWD)/$(TEAMCITY_DATA_DIR):/data/teamcity_server/datadir \
@@ -76,7 +81,7 @@ test: ## Run the unit/integration tests
 	@echo -n "Teamcity server is booting (this may take a while)..."
 	@until $$(curl -o /dev/null -sfI $(TEAMCITY_HOST)/login.html);do echo -n ".";sleep 5;done
 	@export TEAMCITY_ADDR=$(TEAMCITY_HOST) TEAMCITY_USER=admin TEAMCITY_PASSWORD=admin TF_ACC=1\
-		&& go test -v -failfast -timeout 60s ./...
+		&& go test -v -failfast -timeout 90s ./...
 
 .PHONY: $(PLATFORMS)
 $(PLATFORMS): # Build the project for all available platforms
