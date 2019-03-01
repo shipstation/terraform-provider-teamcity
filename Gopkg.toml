@@ -26,8 +26,8 @@
 
 
 [[constraint]]
-  branch = "ss-master"
-  name = "github.com/shipstation/go-teamcity-sdk"
+  name = "github.com/cvbarros/go-teamcity-sdk"
+  source = "../go-teamcity-sdk"
 
 [[constraint]]
   name = "github.com/hashicorp/terraform"
